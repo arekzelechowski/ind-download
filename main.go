@@ -1,5 +1,3 @@
-// This is targeting windows specifically, because I made this for my brother.
-// If you need to use this abomination yourself, be sure to edit the code accordingly.
 package main
 
 import (
@@ -10,17 +8,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"regexp"
 	"sync"
 )
 
-var R = regexp.MustCompile(`https://indd.adobe.com/view/(.*)`)
-
 const (
-	wkhtmltopdf = "./wkhtmltopdf.exe"
+	wkhtmltopdf = "/usr/local/bin/wkhtmltopdf"
 
-	urlFmt0 = "https://adobeindd.com/view/publications/%s/1/publication.html"
-	urlFmt1 = "https://adobeindd.com/view/publications/%s/1/publication-%d.html"
+	urlFmt0 = "https://indd.adobe.com/view/publication/%s/1/publication.html"
+	urlFmt1 = "https://indd.adobe.com/view/publication/%s/1/publication-%d.html"
 )
 
 func main() {
@@ -35,14 +30,10 @@ func main() {
 	defer f.Close()
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4)
-	for url := range readLines(f) {
-		matches := R.FindStringSubmatch(url)
-		if matches == nil {
-			continue
-		}
-		id := matches[1]
+	for id := range readLines(f) {
+		url := ""
 		log.Printf("%s: Collecting HTML pages.\n", id)
-		argList := []string{"-s", "A5"}
+		argList := []string{"-s", "A5", "-O", "landscape"}
 		var page int
 		for {
 			if page == 0 {
@@ -50,7 +41,7 @@ func main() {
 			} else {
 				url = fmt.Sprintf(urlFmt1, id, page)
 			}
-			rsp, err := http.Head(url)
+			rsp, err := http.Get(url)
 			if err != nil || rsp.StatusCode != 200 {
 				log.Printf("%s: Last page found.\n", id)
 				break
@@ -63,7 +54,7 @@ func main() {
 			log.Printf("%s: Nothing to download.\n", id)
 			continue
 		}
-		argList = append(argList, fmt.Sprintf(`out\%s.pdf`, id))
+		argList = append(argList, fmt.Sprintf(`out/%s.pdf`, id))
 		sem <- struct{}{}
 		wg.Add(1)
 		log.Printf("%s: Downloading pages and converting to PDF.\n", id)
